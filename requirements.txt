@@ -1,0 +1,2 @@
+pygame==2.5.0   # For sound playback
+pyttsx3==2.90   # For text-to-speech functionality
