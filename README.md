@@ -46,6 +46,13 @@ The application relies on the following libraries:
 - **[pygame](https://www.pygame.org/):** For playing sound effects in the application.
 - **[pyttsx3](https://pyttsx3.readthedocs.io/):** For text-to-speech functionality.
 - **tkinter:** For creating the GUI. Pre-installed with Python.
+- **gtts:** Google Text to Speach allows for clearly dictated words.
+- **threading:** Useful for processing multple things at a time.
+- **tempfile:** This app creates temp files on the fly for the audio files
+- **random:** Powers the word game.
+- **Math:** Math :P
+- **Playsound:** plays the word files
+  
 
 ## Contributing
 
