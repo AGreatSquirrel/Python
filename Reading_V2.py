@@ -26,7 +26,7 @@ class ReadingApp:
         self.root = tk.Tk()
         self.root.title("Learn to Read")
         self.root.geometry()
-        self.current_theme = "Pastel Pink" 
+        self.current_theme = "Default" 
         self.current_font_size = 24
 
         self.sizes = {
