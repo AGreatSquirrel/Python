@@ -2,177 +2,195 @@ import tkinter as tk
 from gtts import gTTS
 import os
 import tempfile
-import playsound
 import threading
 import math
 import random
-import pygame  
-import time
+import pygame
+import playsound
 from pathlib import Path
 from collections import deque
 
-recent_words = deque(maxlen=5)  # Will hold the last 5 words
+class Word:
+    def __init__(self, text):
+        self.text = text        # the actual word, like "cat"
+        self.clicks = 0         # how many times it's been clicked
+
+    def increment_clicks(self):
+        self.clicks += 1        # add one when it's clicked
 
 
-# Initialize pygame mixer
-pygame.mixer.init()
+class ReadingApp:
+    def __init__(self):
+        pygame.mixer.init()
 
-# Load real sound files
-CORRECT_SOUND_PATH = "correct.wav"  # Replace with actual path
-WRONG_SOUND_PATH = "wrong.wav"  # Replace with actual path
+        self.root = tk.Tk()
+        self.root.title("Learn to Read")
+        self.root.geometry("800x600")
+        self.current_theme = "Pastel Pink"  
 
-def play_sound(sound_file):
-    """Plays the given sound file"""
-    pygame.mixer.Sound(sound_file).play()
 
-def speak_word(word):
-    """Plays the spoken word using gTTS"""
-    def play_audio():
-        temp_file = os.path.join(tempfile.gettempdir(), f"{word}.mp3")
+        word_list = [
+    "the", "and", "go", "had", "he", "see", "has", "you", "we", "of",
+    "am", "at", "to", "as", "have", "in", "is", "it", "can", "his", "on", "did",
+    "girl", "for", "up", "but", "all", "look", "with", "her", "what", "was", "were"
+]
 
-        if not os.path.exists(temp_file):
-            tts = gTTS(text=word, lang='en')
-            tts.save(temp_file)
+        self.words = sorted([Word(w) for w in word_list], key=lambda w: w.text)
 
-        playsound.playsound(temp_file)
 
-    threading.Thread(target=play_audio, daemon=True).start()
+        self.themes = {
+            "Default": {"bg": "#f0f0f0","button_bg":"SystemButtonFace","button_fg":"#000000"},
+            "Pastel Pink": {"bg": "#ffe6f0", "button_bg": "#ffb6c1", "button_fg": "#000"},
+            "Soft Lavender": {"bg": "#f3e5f5", "button_bg": "#d1c4e9", "button_fg": "#000"},
+            "Pale Yellow": {"bg": "#fff9c4", "button_bg": "#fff176", "button_fg": "#000"},
+            "Mint Green": {"bg": "#e0f2f1", "button_bg": "#a5d6a7", "button_fg": "#000"},
+            "Sky Blue": {"bg": "#e1f5fe", "button_bg": "#81d4fa", "button_fg": "#000"},
+        }
 
-def adjust_window_size(root, num_words):
-    """Dynamically adjusts window size and column count based on bigger buttons."""
-    max_width = root.winfo_screenwidth() * 0.8  # Use 80% of screen width
-    button_width = 180   # increased for bigger buttons
-    button_height = 120  # increased for taller buttons
+        self.current_word = None
+        self.score = 0
+        self.game_active = False
+        self.recent_words = deque(maxlen=5)
+        self.buttons = {}
 
-    cols = max(2, min(num_words, int(max_width // button_width)))
-    rows = math.ceil(num_words / cols)
+        self.setup_menu()
+        self.create_word_buttons()
+        self.setup_controls()
 
-    width = int(50 + cols * button_width)
-    height = int(150 + rows * button_height)  # room for buttons + score + controls
+    def setup_menu(self):
+        menu_bar = tk.Menu(self.root)
+        view_menu = tk.Menu(menu_bar, tearoff=0)
+        for theme_name in self.themes:
+            view_menu.add_command(label=theme_name, command=lambda name=theme_name: self.apply_theme(name))
+        menu_bar.add_cascade(label="View", menu=view_menu)
+        self.root.config(menu=menu_bar)
 
-    root.geometry(f"{width}x{height}")
-    return cols
- 
+    def apply_theme(self, theme_name):
+        self.current_theme = theme_name
+        theme = self.themes.get(theme_name)
+        if not theme:
+            return
 
-def create_word_buttons(root, words):
-    """Creates word buttons dynamically"""
-    frame = tk.Frame(root)
-    frame.pack(pady=10)
+        self.root.config(bg=theme["bg"])
+        self.frame.config(bg=theme["bg"])
+        self.control_frame.config(bg=theme["bg"])
+        self.score_label.config(bg=theme["bg"], fg=theme["button_fg"])
+        for button in self.buttons.values():
+            button.config(bg=theme["button_bg"], fg=theme["button_fg"])
+        self.game_button.config(bg=theme["button_bg"], fg=theme["button_fg"])
+        self.repeat_button.config(bg=theme["button_bg"], fg=theme["button_fg"])
 
-    cols = adjust_window_size(root, len(words))  
-    buttons = {}
+    def create_word_buttons(self):
+        self.frame = tk.Frame(self.root)
+        self.frame.pack(pady=10)
 
-    for i, word in enumerate(words):
-        button = tk.Button(frame, text=word, font=("Arial", 24, "bold"), width=6, height=2, command=lambda w=word: check_word(w, buttons))
-        button.grid(row=i // cols, column=i % cols, padx=10, pady=10)
-        buttons[word] = button  
+        cols = self.adjust_window_size(len(self.words))
+        for i, word in enumerate(self.words):
+            button = tk.Button(self.frame, text=word.text, font=("Arial", 40, "bold"),
+                       width=6, height=2, command=lambda w=word: self.check_word(w.text))
+            button.grid(row=i // cols, column=i % cols, padx=10, pady=10)
+            self.buttons[word.text] = button
 
-    game_button = tk.Button(root, text="Word Game", font=("Arial", 24, "bold"), bg="blue", fg="white", command=lambda: toggle_game(buttons, game_button))
-    game_button.pack(pady=10)
+    def setup_controls(self):
+        self.control_frame = tk.Frame(self.root)
+        self.control_frame.pack(pady=10)
 
-    global score_label
-    score_label = tk.Label(root, text="Score: 0", font=("Arial", 18))
-    score_label.pack()
+        self.game_button = tk.Button(self.control_frame, text="Word Game", font=("Arial", 24, "bold"),
+                                     bg="blue", fg="white", command=self.toggle_game)
+        self.game_button.grid(row=0, column=0, padx=10)
 
-def toggle_game(buttons, game_button):
-    """Turns the word game ON or OFF"""
-    global game_active, current_word, score  
+        self.repeat_button = tk.Button(self.control_frame, text="Repeat Word", font=("Arial", 24),
+                                       bg="gray", fg="white", command=self.repeat_current_word)
+        self.repeat_button.grid(row=0, column=1, padx=10)
+        self.repeat_button.config(state="disabled")
 
-    if game_active:  
-        game_active = False  
-        game_button.config(bg="blue", text="Word Game")  
-        current_word = None  
-        score = 0  
-        score_label.config(text="Score: 0")  
-    else:  
-        game_active = True  
-        game_button.config(bg="red", text="Stop Game")  
-        score = 0  
-        score_label.config(text="Score: 0")  
-        start_game(buttons)  
+        self.score_label = tk.Label(self.root, text="Score: 0", font=("Arial", 18))
+        self.score_label.pack()
 
-def start_game(buttons):
-    global current_word
+    def adjust_window_size(self, num_words):
+        max_width = self.root.winfo_screenwidth() * 0.8
+        button_width = 180
+        button_height = 120
+        cols = max(2, min(num_words, int(max_width // button_width)))
+        rows = math.ceil(num_words / cols)
+        width = int(50 + cols * button_width)
+        height = int(250 + rows * button_height)
+        self.root.geometry(f"{width}x{height}")
+        return cols
 
-    if not game_active:
-        return
+    def speak_word(self, word):
+        def play_audio():
+            temp_file = os.path.join(tempfile.gettempdir(), f"{word}.mp3")
+            if not os.path.exists(temp_file):
+                tts = gTTS(text=word, lang='en')
+                tts.save(temp_file)
+            playsound.playsound(temp_file) 
+        threading.Thread(target=play_audio, daemon=True).start()
 
-    available_words = [word for word in buttons.keys() if word not in recent_words]
+    def play_sound(self, file):
+        pygame.mixer.Sound(file).play()
 
-    # If not enough unique words, allow repeats from the recent list
-    if not available_words:
-        available_words = list(buttons.keys())
+    def start_game(self):
+        available_words = [word for word in self.buttons if word not in self.recent_words]
+        if not available_words:
+            available_words = list(self.buttons.keys())
+        new_word = random.choice(available_words)
+        self.current_word = new_word
+        self.recent_words.append(new_word)
+        self.root.after(500, lambda: self.speak_word(new_word))
 
-    new_word = random.choice(available_words)
-    current_word = new_word
-    recent_words.append(new_word)
-
-    root.after(500, lambda: speak_word(new_word))  # 0.5s delay before speaking
-
-def check_word(selected_word, buttons):
-    """Checks if the selected word matches the game word and updates score"""
-    global score
-    if game_active:
-        if selected_word == current_word:
-            buttons[selected_word].config(bg="green")  
-            play_sound(CORRECT_SOUND_PATH)  # Play correct sound  
-            root.after(1000, lambda: buttons[selected_word].config(bg="SystemButtonFace"))  
-            score += 1  
-            score_label.config(text=f"Score: {score}")  
-            root.after(1500, lambda: start_game(buttons))  # **1.5s delay before next word**
+    def toggle_game(self):
+        if self.game_active:
+            self.game_active = False
+            self.game_button.config(bg="blue", text="Word Game")
+            self.repeat_button.config(state="disabled", bg="gray")
+            self.current_word = None
+            self.score = 0
+            self.score_label.config(text="Score: 0")
         else:
-            buttons[selected_word].config(bg="red")  
-            play_sound(WRONG_SOUND_PATH)  # Play wrong sound  
-            root.after(1000, lambda: buttons[selected_word].config(bg="SystemButtonFace"))  
-            score = 0  
-            score_label.config(text="Score: 0")  
-    else:
-        speak_word(selected_word)  # Just say the word if game is off
+            self.game_active = True
+            self.game_button.config(bg="red", text="Stop Game")
+            self.repeat_button.config(state="normal", bg="green")
+            self.score = 0
+            self.score_label.config(text="Score: 0")
+            self.start_game()
 
-def repeat_current_word():
-    if game_active and current_word:
-        speak_word(current_word)
+    def check_word(self, selected_word):
+        if self.game_active:
+            if selected_word == self.current_word:
+                self.buttons[selected_word].config(bg="green")
+                self.play_sound("correct.wav")
+                self.root.after(1000, lambda: self.buttons[selected_word].config(
+                    bg=self.themes[self.current_theme]["button_bg"],
+                    fg=self.themes[self.current_theme]["button_fg"]
+))
+                self.score += 1
+                self.score_label.config(text=f"Score: {self.score}")
+                self.root.after(1500, self.start_game)
+            else:
+                self.buttons[selected_word].config(bg="red")
+                self.play_sound("wrong.wav")
+                self.root.after(1000, lambda: self.buttons[selected_word].config(
+                    bg=self.themes[self.current_theme]["button_bg"],
+                    fg=self.themes[self.current_theme]["button_fg"]
+))
+                self.score = 0
+                self.score_label.config(text="Score: 0")
+        else:
+            self.speak_word(selected_word)
+            # Track clicks for that word
+            for word in self.words:
+                if word.text == selected_word:
+                    word.increment_clicks()
+                    print(f"{word.text} has been clicked {word.clicks} times")  # Dev feedback
 
-def toggle_game(buttons, game_button):
-    global game_active, current_word, score
+    def repeat_current_word(self):
+        if self.game_active and self.current_word:
+            self.speak_word(self.current_word)
 
-    if game_active:
-        game_active = False
-        game_button.config(bg="blue", text="Word Game")
-        current_word = None
-        score = 0
-        score_label.config(text="Score: 0")
-        repeat_button.config(state="disabled", bg="gray")
-    else:
-        game_active = True
-        game_button.config(bg="red", text="Stop Game")
-        score = 0
-        score_label.config(text="Score: 0")
-        repeat_button.config(state="normal", bg="green")
-        start_game(buttons)
+    def run(self):
+        self.root.mainloop()
 
-
-# Main application
-root = tk.Tk()
-root.title("Learn to Read")
-
-words = sorted(["the", "and", "go", "had", "he", "see", "has", "you", "we", "of", "am", "at", "to", "as", "have", "in", "is", "it", "can", "his", "on", "did", "girl", "for", "up", "but", "all", "look", "with", "her", "what", "was", "were"])
-
-game_active = False  
-current_word = None  
-score = 0  
-
-create_word_buttons(root, words)
-
-repeat_button = tk.Button(
-    root,
-    text="Repeat Word",
-    font=("Arial", 24),
-    bg="gray",
-    fg="white",
-    command=lambda: repeat_current_word()
-)
-repeat_button.pack(pady=5)
-
-
-root.mainloop()
+if __name__ == "__main__":
+    app = ReadingApp()
+    app.run()
