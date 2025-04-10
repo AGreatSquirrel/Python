@@ -25,8 +25,15 @@ class ReadingApp:
 
         self.root = tk.Tk()
         self.root.title("Learn to Read")
-        self.root.geometry("800x600")
-        self.current_theme = "Pastel Pink"  
+        self.root.geometry()
+        self.current_theme = "Pastel Pink" 
+        self.current_font_size = 24
+
+        self.sizes = {
+            "Small (Default)": 24,
+            "Medium": 30,
+            "Large": 36,
+        } 
 
 
         word_list = [
@@ -59,9 +66,32 @@ class ReadingApp:
 
     def setup_menu(self):
         menu_bar = tk.Menu(self.root)
+
+    # View menu (top-level)
         view_menu = tk.Menu(menu_bar, tearoff=0)
+
+    # Theme submenu inside View
+        theme_menu = tk.Menu(view_menu, tearoff=0)
         for theme_name in self.themes:
-            view_menu.add_command(label=theme_name, command=lambda name=theme_name: self.apply_theme(name))
+            theme_menu.add_command(
+            label=theme_name,
+            command=lambda name=theme_name: self.apply_theme(name)
+        )
+
+        view_menu.add_cascade(label="Themes", menu=theme_menu)
+
+    # Size submenu inside View
+        size_menu = tk.Menu(view_menu, tearoff=0)
+        for size_name, size_value in self.sizes.items():
+            size_menu.add_command(
+            label=size_name,
+            command=lambda value=size_value: self.apply_size(value)
+        )
+
+        view_menu.add_cascade(label="Size", menu=size_menu)
+  
+
+    # Add View to the main menu bar
         menu_bar.add_cascade(label="View", menu=view_menu)
         self.root.config(menu=menu_bar)
 
@@ -80,16 +110,29 @@ class ReadingApp:
         self.game_button.config(bg=theme["button_bg"], fg=theme["button_fg"])
         self.repeat_button.config(bg=theme["button_bg"], fg=theme["button_fg"])
 
+    def apply_size(self, font_size):
+        self.current_font_size = font_size
+
+        for button in self.buttons.values():
+            button.config(font=("Arial", font_size, "bold"))
+
+        self.adjust_window_size(len(self.buttons), font_size)
+    
+
     def create_word_buttons(self):
         self.frame = tk.Frame(self.root)
         self.frame.pack(pady=10)
 
-        cols = self.adjust_window_size(len(self.words))
+        cols = self.adjust_window_size(len(self.words), 24)
         for i, word in enumerate(self.words):
-            button = tk.Button(self.frame, text=word.text, font=("Arial", 40, "bold"),
-                       width=6, height=2, command=lambda w=word: self.check_word(w.text))
+            button = tk.Button(self.frame, text=word.text, font=("Arial", 24, "bold"),
+                       width=5, height=1, command=lambda w=word: self.check_word(w.text))
             button.grid(row=i // cols, column=i % cols, padx=10, pady=10)
             self.buttons[word.text] = button
+
+            self.root.update_idletasks()
+            self.adjust_window_size(len(self.words), self.current_font_size)
+
 
     def setup_controls(self):
         self.control_frame = tk.Frame(self.root)
@@ -107,16 +150,23 @@ class ReadingApp:
         self.score_label = tk.Label(self.root, text="Score: 0", font=("Arial", 18))
         self.score_label.pack()
 
-    def adjust_window_size(self, num_words):
-        max_width = self.root.winfo_screenwidth() * 0.8
-        button_width = 180
-        button_height = 120
-        cols = max(2, min(num_words, int(max_width // button_width)))
+    def adjust_window_size(self, num_words, font_size):
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+
+    # Approximate button size based on font
+        button_width = font_size * 7.5    # rough estimate of width per font size
+        button_height = font_size * 2   # rough estimate of height per font size
+
+        cols = max(2, min(num_words, int(screen_width * 0.9 // button_width)))
         rows = math.ceil(num_words / cols)
-        width = int(50 + cols * button_width)
-        height = int(250 + rows * button_height)
+
+        width = min(int(50 + cols * button_width), int(screen_width * 0.95))
+        height = min(int(350 + rows * button_height), int(screen_height * 0.95))
+
         self.root.geometry(f"{width}x{height}")
         return cols
+
 
     def speak_word(self, word):
         def play_audio():
@@ -163,7 +213,7 @@ class ReadingApp:
                 self.root.after(1000, lambda: self.buttons[selected_word].config(
                     bg=self.themes[self.current_theme]["button_bg"],
                     fg=self.themes[self.current_theme]["button_fg"]
-))
+                    ))
                 self.score += 1
                 self.score_label.config(text=f"Score: {self.score}")
                 self.root.after(1500, self.start_game)
@@ -173,7 +223,7 @@ class ReadingApp:
                 self.root.after(1000, lambda: self.buttons[selected_word].config(
                     bg=self.themes[self.current_theme]["button_bg"],
                     fg=self.themes[self.current_theme]["button_fg"]
-))
+                    ))
                 self.score = 0
                 self.score_label.config(text="Score: 0")
         else:
